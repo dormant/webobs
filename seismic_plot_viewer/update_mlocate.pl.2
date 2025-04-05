@@ -1,0 +1,51 @@
+#!/usr/bin/env perl
+#
+# Perl script to update databases used in seismic_plot_viewer.cgi
+# Runs once a day
+# a convenient form
+#
+# Version 2, updated to only run on mvofls2, as required by seismic_plot_viewer.cgi.4.2 
+#
+# Rod Stewart, UWI/SRC, 2021-06-24, 2023-06-18
+
+use strict;
+use warnings;
+use Sys::Hostname;
+
+my $dir_data; 			# Where we look for data in file hierarchy
+
+# Variables used in looking for plots
+my $plot_type;
+my $share_data = '/mnt/mvofls2/Seismic_Data/monitoring_data';			# where data is shared
+
+# Choices for $plot_type
+my @plot_types = qw( heli heliwide sgram pan helimulti heliscan helidisp vlp strain strainpan );
+my %plot_type_dirs = ( 	'heli' => 'helicorder_plots',
+			'heliwide' => 'helicorder_plots_wide',
+			'sgram' => 'sgram',
+			'pan' => 'pan_plots',
+			'helimulti' => 'helicorder_plots_multi',
+			'heliscan' => 'helicorder_plots_scanned',
+			'helidisp' => 'helicorder_plots_displacement',
+			'strain' => 'strain_plots',
+			'strainpan' => 'strain_pan_plots',
+            'vlp' => 'vlp_plots' );
+
+
+for $plot_type (@plot_types) {
+
+
+	$dir_data = join( '/', $share_data, $plot_type_dirs{ $plot_type } );
+	my $dbfile = join( '/', $dir_data, '.dbfile' );
+	$dbfile =~ s/^\///;
+	$dbfile =~ s/\/\./\./;
+	$dbfile =~ s/\//_/g;
+	my $command = join( ' ', '/usr/bin/updatedb -v -l 0 -U', $dir_data, '-o', $dbfile );
+       print $command, "\n";
+	system( $command );
+		
+
+}
+
+
+

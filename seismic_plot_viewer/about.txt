@@ -1,0 +1,197 @@
+----------------------------------------------------------------------------
+seismic_plot_viewer.cgi, version 4.3.2, Rod Stewart, MVO, 23 June 2023
+
+
+----------------------------------------------------------------------------
+NOTES
+
+The page should refresh automatically only if you are showing today's data.
+
+It refreshes once a minute. Most of the plots are also updated every minute,
+so what you see you could be up to two minutes behind. Spectrograms could be
+up to six minutes behind.
+
+If you are displaying data for today, the date of the displayed plot will be
+automatically updated at midnight UTC. The script might not be able to find
+the plot for the first minute of the new day.
+
+If there is more than one plot for a given day, they will all be shown as
+thumbnails, linked to the full-size plots.
+
+The page only lists the stations that are available for the selected plot
+type and date.
+
+If a partial plot is shown, or no plot at all, you have probably requested a
+plot at the same time as the file is being written. Wait a minute or two and
+try again, or try another station.
+
+Firefox seems to have problems displaying some image files. Press Shift - Reload.
+
+This script requires two scripts in /home/webobs/src/seismic_plot_viewer/ to
+be running as daily cronjobs to update the database:
+- update_mlocate.pl
+- check_holdings.sh
+
+
+----------------------------------------------------------------------------
+PLOT TYPES
+
+Helicorder
+Traditional helicorder plots of vertical broad-band or short-period data, as
+produced by the station. These are updated every minute.
+
+Short-period helicorder
+Helicorder plots from short-period stations, along with plots of broad-band
+data filtered with a 1Hz high-pass filter to mimic a short-period signal.
+These are updated every minute.
+
+Wide helicorder
+Landscape-shaped helicorder plots using short-period data (original or
+filtered). These are updated every minute.
+
+Multiple helicorder
+Combined helicorder plots from groups of stations. These are generated at
+the end of each day.
+
+Spectrogram
+Spectrogram plots of vertical broad-band or short-period data, as produced
+by the station. These are updated every 5 minutes. The spectrogram module in
+earthwom is crash-prone, so data availability is patchy.
+
+Pan plot
+Combined ("panacea") plots showing helicorder, spectrogram, waveform and RMS
+of BB and SP vertical data. These are generated at the end of each day.
+
+Scanned helicorder
+Scanned paper helicorder plots from the 1995-1996 MVO analogue network. 
+
+Displacement helicorder
+Helicorder plots showing the integrated signal from selected broad-band
+vertical stations. These are updated every minute.
+
+Infrasound helicorder
+Helicorder plot showing infrasonic data from seismic stations equipped with
+an infrasound sensor.
+
+Very-long period seismic data
+Plots of integrated vertical seismic data from selected broad-band station
+after filtering with a 0.003 - 0.1 Hz bandpass filter. These are generated at
+the end of each day.
+
+Strain
+Strain data from CALIPSO stations, unfiltered and filtered with a 0.1 Hz
+lowpass filter. These are updated once an hour, at 20 minutes past.
+
+Strain pan plot
+Unfiltered strain data from CALIPSO stations, in a combined plot showing
+helicorder, spectrogram, signal and RMS.
+
+
+----------------------------------------------------------------------------
+STATION CODES
+
+ABD:   La Joyeuse, Anse Bertrand, Guadeloupe
+AIRS:  Air Studios, Montserrat
+ANWB:  Willy Bob, Barbuda, Antigua and Barbuda (NEIC)
+BBGH:  Gun Hill, Barbados
+BHS:   Orange Hill, St. Vincent
+DLPL:  La Plaine, Dominica
+DSLB:  Salisbury, Dominica
+DWS:   Wesley, Dominica
+GCMP:  Mt. Pleasant, Carriacou, Grenada
+GERD:  Geralds, Montserrat
+GRGR:  Grenville, Grenada
+GRHS:  Sauteurs, Grenada
+GRSS:  Sisters, Grenada
+GRW:   Mt. St. Catherine, Grenada
+MBBE:  Bethel, Montserrat
+MBBY:  Broderick's Yard, Montserrat
+MBET:  Bethel, Montserrat
+MBFL:  Flemmings, Montserrat
+MBFR:  Fergus Ridge, Montserrat
+MBGA:  Gages, Montserrat
+MBGB:  Garibaldi Hill, Montserrat
+MBGE:  Galways Estate, Montserrat
+MBGH:  St. Georges Hill, Montserrat
+MBHA:  Harris, Montserrat
+MBLG:  Long Ground, Montserrat
+MBLY:  Lee's Yard, Montserrat
+MBMH:  Mongo Hill, Montserrat
+MBRV:  Rendezvous, Montserrat
+MBRY:  Roches Yard, Montserrat
+MBSS:  South Soufriere Hills, Montserrat
+MBW1:  Waterworks, Montserrat (north microphone)
+MBW2:  Waterworks, Montserrat (centre microphone)
+MBW3:  Waterworks, Montserrat (south microphone)
+MBWH:  Windy Hill, Montserrat
+MBWW:  Waterworks, Montserrat
+MCPN:  Chances Peak, Montserrat
+MCPT:  Chances Peak, Montserrat
+MCPZ:  Chances Peak, Montserrat
+MDN:   Morne Daniel, Dominica
+MGAT:  Gages, Montserrat
+MGHZ:  St. Georges Hill, Montserrat
+MGT2:  Possible typo in file naming for scanned helicorder
+MHRE:  Possible typo in file naming for scanned helicorder
+MHRV:  Hermitage. Montserrat
+MLGT:  Long Ground, Montserrat
+MRYT:  Roaches Yard, Montserrat
+MSCP:  Chances Peak, Montserrat
+MSMX:  Molyneux, Montserrat
+MSNW   North West Bluff, Montserrat
+MSS1:  Scar 1
+MTAC:  Temporary station at Agricultural Compound
+MTB1:  Temporary station in the Belham Valley
+MTB2:  Temporary station in the Belham Valley
+MTB3:  Temporary station in the Belham Valley
+MTB4:  Temporary station in the Belham Valley
+MTFL:  Temporary station at Flemmings
+MTGH:  Temporary station at St Georges Hill
+MTM2:  Temporary station at MON2
+MTWW:  Temporary station at Waterworks
+MVPE:  Possible typo in file naming for scanned helicorder
+MSUH:  Upper Hermitage, Montserrat
+MWHZ:  Windy Hill, Montserrat
+N01:   Temporary SPIDER deployment
+N02:   Temporary SPIDER deployment
+N03:   Temporary SPIDER deployment
+N07:   Temporary SPIDER deployment
+N08:   Temporary SPIDER deployment
+OLV1:  Olveston, Montserrat
+OLV2:  Olveston, Montserrat
+SABA:  Saba
+SFAN:  Fancy, St. Vincent
+SOA:   Owia, St Vincent
+SSV:   Summit, St. Vincent
+SSV2:  Summit Station2, St Vincent
+SSVA:  Summit Station2, St Vincent
+SVB:   Belmont, St. Vincent
+SVGT:  Georgetown, St Vincent
+SVT:   Saint Vincent (Camden Park) (NEIC)
+SVV:   Wallibou, St. Vincent
+TRC2:  Erciyes Dag 2, Turkey
+TRC3:  Erciyes Dag 3, Turkey
+TRNT:  Trants, Montserrat
+as:    Air Studios, Montserrat
+ge:    Geralds, Montserrat
+o1:    Olveston, Montserrat
+tr:    Trants, Montserrat
+
+
+----------------------------------------------------------------------------
+CHANNEL CODES
+
+BHZ Broad-band vertical seismic signal.
+BIZ Integrated BHZ seismic signal.
+BLZ Broad-band vertical strain signal.
+EDF Short-period infrasoinic signal.
+EHZ Short-period vertical seismic signal, sampled at 200 Hz.
+HDF Broad-band infrasonic signal.
+HHZ Broad-band vertical seismic signal, sampled at 200 Hz. 
+HHZ Sometimes used for integrated BHZ.
+HIZ Integrated HHZ seismic signal.
+MHZ Short-period vertical seismic signal, special purpose.
+PR1 Infrasonic signal (?).
+SHZ Short-period vertical seismic signal.
+V   Vertical channels of integrated filtered broad-band seismic signals.
+3C  Three-component integrated filtered broad-band seismic signals.

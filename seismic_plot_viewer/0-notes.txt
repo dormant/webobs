@@ -1,0 +1,16 @@
+bugs
+notWebobs often shows partial images or no image. OK in Webobs
+check scanned station names
+check if all scanned files are also tifs
+check spectrogram plots
+title is weird
+doesn't keep mobile layout on auto-refresh, unless on mobile device
+if more than one plot for a MBRV BHZ, it also shows SHZ
+
+
+NB: Needs go+x permissions to run in apache
+
+
+
+
+

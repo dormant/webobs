@@ -1,0 +1,1068 @@
+#!/home/webobs/opt/perl/bin/perl
+# Perl script to serve a web page to view seismic plot files in
+# a convenient form
+#
+# Version 1.1: For webobs installation
+# Version 1.2: Adds pan_plot functionality
+# Version 1.3: Larger fonts for Blackberriers in concise mode
+# Version 2.0: Tidied up lots
+# Version 3.0: Totally rewritten for updated seismic monitoring system
+# Version 3.1: Interim release, 2023-06-02
+# Version 3.2: Interim non-release, 2023-06-06
+# Version 4.0: Massive restructuring, to work properly, but limited functionality, 2023-06-13
+# Version 4.1: Added summary and about functionality, 2023-06-15
+# Version 4.2: Restructured because of problems with how today was dealt with, 2023-06-18
+# Version 4.2.1: Fixed bugs found during testing, 2023-06-20
+# Version 4.3: Another restructuring to eliminate persistent bugs, use find instead of locate, 2023-06-21
+# Version 4.3.1: Adds check for corrupt images using exiftool, 2023-06-22
+# Version 4.3.2: Adds mobile layout, 2023-06-23
+# Version 4.3.2a: Forces mobile layout, 2023-06-28
+#
+# Rod Stewart, UWI/SRC/MVO
+#
+#
+# The call to this is in /mvo/webobs/CONFIG/MENU.config
+
+#use v5.24.1;               # For compatibility with webobs
+use strict;
+use warnings;
+use Time::Local;
+use File::Basename;
+use Sys::Hostname;
+use CGI ':standard';
+use CGI::Carp qw/fatalsToBrowser/;
+use Image::ExifTool qw(ImageInfo);
+use HTTP::BrowserDetect ();
+
+
+
+## ============================================================================ 
+##         INITIALISATION 
+##
+
+
+my $hostname;			# Machine being run on, set to either 'webobs' or 'opsproc3'
+$hostname = hostname();
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Get todays date and time (UTC)
+#
+my ($year, $month, $day) = (gmtime())[5,4,3];
+$year = 1900 + $year;
+$month++;
+my $today = sprintf( '%04s%02s%02s', $year, $month, $day );
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Directories and file
+#
+my $dir_data; 			# Where we look for data in file hierarchy
+my $dir_lock; 			# Where we look for lock files
+my $file_holdings;	    # File with list of stations and channels for each plot type
+my $file_bands;	        # File with list of channel codes for each plot type
+my $file_about;	        # File with some explanations for the user
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Variables
+#
+my $debug;			# extra output for debugging
+my $output;			# output format
+my $autoRefresh;    # if auto-refreshing, ie it is today
+my $layout = 'mobile';			# "normal" or "mobile"
+my $showHoldings= 0;
+my $showDetailedHoldings= 0;
+my $showAbout = 0;
+my $showLocked = 0;
+# 
+# Variables used in searching for plots
+#
+my $station_to_plot;
+my $station_search_string;
+my $date_to_plot;
+my $date_to_plot_year;
+my $dateda;
+my $datemo;
+my $dateyr;
+my $plot_type;         
+my $share_data;			# where data is shared
+my $share_data_today;   # where today's data is shared
+my @bands = ();         # Channel codes   
+my %holdings;
+my %holdings_dates;
+my @image_files = ();                   # Found image files
+my @image_files_all_sta = ();           # Found image files, all stations
+#
+# Variables used in output
+#
+my $web_start_page = '/cgi-bin/seismic_plot_viewer_mob.cgi';
+my $title = 'Seismic Plots'; 
+my $gap;			# Gaps used when listing header elements
+my $lgap;			# Number of spaces in a gap
+my $break;			# New line
+my $marker;			# Symbol to marker header element in use
+my $space;			# Single space
+my $plot_width;      		# Width of plot on page
+my $days_to_show;		# Number of days to offer as links
+my @dates = ();
+my $date_latest;    # Latest date for a particular plot type
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Values for host-dependent variables
+#
+if( $hostname eq 'opsproc3' ) {
+    $debug = 1;
+    $output = 'text';
+    $file_bands = './bands.txt';
+    $file_holdings = './holdings.txt';
+    $file_about = './about.txt';
+	$share_data_today = '/mnt/earthworm3/monitoring_data';
+    $share_data = '/mnt/mvofls2/Seismic_Data/monitoring_data';
+    $dir_lock = '.';
+} else {
+    $debug = 0;
+    $output = 'html';
+    $file_bands = '/home/webobs/src/seismic_plot_viewer/bands.txt';
+    $file_holdings = '/home/webobs/src/seismic_plot_viewer/holdings.txt';
+    $file_about = '/home/webobs/src/seismic_plot_viewer/about.txt';
+	$share_data_today = '/mnt/earthworm00/monitoring_data';
+    $share_data = '/mnt/mvofls2/Seismic_Data/monitoring_data';
+    $dir_lock = '/home/webobs/src/seismic_plot_viewer';
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Set possible choices
+#
+my @layouts = qw( normal mobile );
+my @plot_types = qw( heli helisp heliwide helimulti sgram pan heliscan helidisp vlp strain strainpan infra);
+my %plot_types_nice = (	'heli' => 'Helicorder',
+			'helisp' => 'Short-period helicorder',
+			'sgram' => 'Spectrogram',
+			'pan' => 'Pan plot (1996-2019)',
+			'heliwide' => 'Wide helicorder (2020-today)',
+			'helimulti' => 'Multiple helicorder (2014-yesterday)',
+			'heliscan' => 'Scanned helicorder (1995-1996)',
+			'helidisp' => 'Displacement helicorder (2009-today)',
+			'infra' => 'Infrasound helicorder (2009-2020, 2023-today)',
+			'vlp' => 'Very-long period seismic data plot (2021-yesterday)',
+			'strain' => 'Strain (2018,2022-today)',
+			'strainpan' => 'Strain pan plot(2008-2018)');
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Start new CGI thing
+#
+my $q;
+if( not $debug ){
+    $q = CGI->new;
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Set variables from input
+#
+if( $debug ) {
+    ($layout, $plot_type, $date_to_plot, $station_to_plot) = @ARGV;
+} else {
+    $station_to_plot = $q->param('sta');
+    $date_to_plot = $q->param('date');
+    $dateda = $q->param('dateda');
+    $datemo = $q->param('datemo');
+    $dateyr = $q->param('dateyr');
+    if( defined $dateda ) {
+        $date_to_plot = join( '', $dateyr, $datemo, $dateda );
+    }
+    $plot_type = $q->param('what');
+    #$layout = $q->param('layout');
+    my $submit = $q->param('submit');
+    if( not defined $submit ) {
+    } elsif ( $submit eq 'holdings' ){
+        $showHoldings = 1;
+    } elsif ( $submit eq 'detailed holdings' ){
+        $showDetailedHoldings = 1;
+    } elsif ( $submit eq 'about' ){
+        $showAbout = 1;
+    }
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Detect browser
+#
+my $ua;
+if( not $debug ){
+    $ua = HTTP::BrowserDetect->new();         # Client browser information, needed to switch to mobile layout
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Default values
+#
+if( not defined $plot_type ) {
+    $plot_type = 'heli';
+}
+if( not defined $layout ) {
+    $layout= 'mobile';
+}
+if( not defined $date_to_plot ) {
+    $date_to_plot = $today;
+}
+
+my %default_stations_to_plot = (	'heli' 		=> 'MBLY',
+                                    'helisp' 	=> 'MBLY',
+                                    'heliwide' 	=> 'MBLY',
+                                    'sgram' 	=> 'MBLY',
+                                    'pan' 		=> 'MBLY',
+                                    'helimulti' => 'MSS1_MBLY_MBBY_MBGH_MBFL',
+                                    'heliscan' 	=> 'MGHZ',
+                                    'helidisp' 	=> 'MBLY',
+                                    'infra' 	=> 'MBFL',
+					                'vlp'	    => 'V',
+					                'strain'	=> 'AIRS',
+					                'strainpan'	=> 'tr' );
+					
+if( not defined $station_to_plot ) {
+	$station_to_plot = $default_stations_to_plot{ $plot_type };
+}
+
+if( not $debug ){
+    $layout = 'mobile' if( $ua->mobile );
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Set input-dependent variables
+#
+
+if( $date_to_plot eq $today && ($plot_type eq 'heli' || $plot_type eq 'helisp' || $plot_type eq 'heliwide' || $plot_type eq 'sgram' || $plot_type eq 'infra') ){
+    $autoRefresh = 1;
+} else {
+    $autoRefresh = 0;
+}
+
+if( $layout eq 'mobile' ) {
+	$lgap = 1;
+} else {
+	$lgap = 2;
+}
+
+if( $output eq 'text' ) {
+	$break = "\n";
+	$marker = '*';
+	$space = ' ';
+ 	$gap = $space x $lgap;
+} else {
+	$break = "\n<BR>\n";
+	$marker = '<FONT COLOR="#FF0000">*</FONT>';
+	$space = '&nbsp;';
+ 	$gap = $space x $lgap;
+}
+
+if( $plot_type eq 'pan' || $plot_type eq 'strainpan' ) {
+	$plot_width = 852;
+} else {
+	$plot_width = 500;
+}
+
+if( $layout eq 'mobile' ) {
+	$days_to_show = 9;
+} else {
+	$days_to_show = 13;
+}
+	
+$date_to_plot_year = substr( $date_to_plot, 0, 4 );
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Last-minute check
+#
+if( $debug ){
+    print "hostname: $hostname\n";
+	print "plot_type: ", $plot_type, "\n";
+	print "station_to_plot: ", $station_to_plot, "\n";
+	print "date_to_plot: ", $date_to_plot, "\n";
+	print "date_to_plot_year: ", $date_to_plot_year, "\n";
+    print "layout: ", $layout, "\n";
+    print "autoRefresh: ", $autoRefresh, "\n";
+    print "showAbout: ", $showAbout, "\n";
+    print "showHoldings", $showHoldings, "\n";
+    print "showDetailedHoldings", $showDetailedHoldings, "\n";
+}
+
+
+## ============================================================================ 
+##         SET UP SEARCH
+##
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Get bands for this plot type
+#
+open my $handle, '<', $file_bands;
+chomp( my @lines = <$handle> );
+close $handle;
+
+foreach my $line( @lines ) {
+		
+	my @chunks = split /\s+/, $line;
+
+	if( $chunks[0] eq $plot_type) {
+
+        @bands =  @chunks[ 1 .. $#chunks ];
+
+	}
+
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Get holdings for this plot type
+#
+my $lockHoldings = join( '/', $dir_lock, 'check_holdings.lock' );
+if( -e $lockHoldings ){
+    $showLocked = 1;
+    goto LOCKED;
+}
+
+open $handle, '<', $file_holdings;
+chomp( @lines = <$handle> );
+close $handle;
+
+
+foreach my $line( @lines ) {
+		
+    my @chunks = split /\s+/, $line;
+
+    if( $chunks[0] eq $plot_type) {
+
+        my @scnl;
+        my $cha;
+        if( $plot_type eq 'strain' ){
+            @scnl = split/\./, $chunks[2];
+            $cha = $scnl[2];
+        } else {
+            @scnl = split/_/, $chunks[2];
+            $cha = $scnl[1];
+        }
+        if( $plot_type eq 'strainpan' || $plot_type eq 'vlp' || $plot_type eq 'helimulti' ){
+            push( @{ $holdings{$chunks[1]} }, $chunks[2] );
+            push( @{ $holdings_dates{$chunks[2]} }, $chunks[3], $chunks[4] );
+        } else {
+            if( grep {/$cha/} @bands ){ 
+                push( @{ $holdings{$chunks[1]} }, $chunks[2] );
+                push( @{ $holdings_dates{$chunks[2]} }, $chunks[3], $chunks[4] );
+            }
+        }
+
+
+    }
+
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Check if variables are in scope
+#
+die( "Bad plot type: $plot_type" ) unless( grep { $_ eq $plot_type } @plot_types ); 
+die( "Bad layout: $layout " ) unless( grep { $_ eq $layout} @layouts ); 
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Catch bad station when changing plot_type
+#
+unless ( grep {$_ eq $station_to_plot } ( keys %holdings ) ) {
+	$station_to_plot = $default_stations_to_plot{ $plot_type };
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Display holdings and bands
+#
+if( $debug ){
+    print "holdings\n";
+    foreach my $key (sort keys %holdings){
+        print "$key: @{$holdings{$key}}\n";
+    }
+    print "holdings_dates\n";
+    foreach my $key (sort keys %holdings_dates){
+        print "$key: @{$holdings_dates{$key}}\n";
+    }
+    print "bands: ", join( ', ', @bands ), "\n";
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Set up arrays for submit menus
+#
+my $years_in_dir = ($year - 1995 + 1);
+my @months = qw( 01 02 03 04 05 06 07 08 09 10 11 12 );
+my @days = qw( 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 );
+my @years = ();
+for( my $i=$year; $i>$year-$years_in_dir; $i-- ) {
+	push( @years, sprintf( '%04s', $i ) );
+}
+
+
+my %plot_type_dirs = ( 	'heli' => 'helicorder_plots',
+			'helisp' => 'helicorder_plots',
+			'heliwide' => 'helicorder_plots_wide',
+			'sgram' => 'sgram',
+			'pan' => 'pan_plots',
+			'helimulti' => 'helicorder_plots_multi',
+			'heliscan' => 'helicorder_plots_scanned',
+			'helidisp' => 'helicorder_plots_displacement',
+			'infra' => 'helicorder_plots',
+            'strain' => 'strain_plots',
+            'strainpan' => 'strain_pan_plots',
+            'vlp' => 'vlp_plots' );
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Search string for station
+#
+my @stachans_to_search = @{$holdings{$station_to_plot}};
+if( $debug ){
+    print "stachans_to_search: ", join( ', ', @stachans_to_search ), "\n";
+}
+#if( $plot_type eq 'helisp' ) {
+#    @stachans_to_search = grep { /(SHZ|EHZ|MHZ)/ } @stachans_to_search;
+#}elsif( $plot_type eq 'infra' ) {
+#    @stachans_to_search = grep { /(EDF|HDF|PR1)/ } @stachans_to_search;
+#}
+
+if( scalar( @stachans_to_search ) > 1 ) {
+   $station_search_string = join( '|', @stachans_to_search );
+   $station_search_string = join( '', '(', $station_search_string, ')' );
+} else {
+   $station_search_string = $stachans_to_search[0];
+}
+
+if( $debug ) {
+    print "station_search_string: $station_search_string\n";
+}
+        
+
+
+
+## ============================================================================ 
+##         SEARCH
+##
+my $command_search_all_sta;
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+#  Search today
+#
+if( $date_to_plot eq $today ) {
+    if( $plot_type eq 'strain' ){
+        $share_data_today = $share_data;
+    }
+	$command_search_all_sta = join( ' ', '/usr/bin/find',  
+        join( '/', $share_data_today, $plot_type_dirs{ $plot_type } ), '| grep',
+	    $date_to_plot );
+
+} else {
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+#  Search other days
+#
+	# Set search directory based on plot type
+	$dir_data = join( '/', $share_data, $plot_type_dirs{ $plot_type }, $date_to_plot_year );
+
+	# Find matching image files 
+    $command_search_all_sta = join( ' ', '/usr/bin/find', 
+        $dir_data, '| grep',
+	    $date_to_plot );
+}
+
+if( $debug ){
+    print "$command_search_all_sta \n";
+}
+
+@image_files_all_sta = `$command_search_all_sta`;
+chomp @image_files_all_sta;
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Remove tiff files
+#
+@image_files_all_sta = grep {! /\.tif$/} @image_files_all_sta;
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Image files for searched station
+#
+if( $plot_type eq 'helimulti' || $plot_type eq 'strainpan' ){
+    @image_files = grep { /$station_search_string\./ } @image_files_all_sta;
+} else {
+    @image_files = grep { /$station_search_string/ } @image_files_all_sta;
+}
+
+my $n_image_files_all_sta = scalar( @image_files_all_sta );
+my $n_image_files = scalar( @image_files );
+if( $debug ){
+    print "image_files: $n_image_files\n";
+    print "image_files_all_sta: $n_image_files_all_sta\n";
+}
+
+
+
+###############################################################################
+#### MASSIVE CLUDGE
+#
+# If you have a pair of BB and SP, drop the SP
+#
+#### INNER MASSIVE CLUDGE TO DEAL WITH MBHA
+#
+my @image_files_tmp = @image_files;
+foreach my $file (@image_files_tmp){
+    if (index($file, 'BHZ') != -1 && index($file, 'MBHA') == -1) {
+        $file =~ s/BHZ/SHZ/;
+        @image_files = grep {!/$file/} @image_files;
+    } elsif (index($file, 'HHZ') != -1) {
+        $file =~ s/HHZ/EHZ/;
+        @image_files = grep {!/$file/} @image_files;
+    }
+}
+###############################################################################
+#### END OF MASSIVE CLUDGE
+			
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Total number of matching files
+# 
+$n_image_files = scalar( @image_files );
+if( $debug ) {
+    print "n_image_files: $n_image_files\n";
+    foreach my $file (@image_files){
+        print "file: $file\n";
+    }
+}
+
+
+## ============================================================================ 
+##         We have jumped here if lockfile exists
+##
+LOCKED:
+
+
+## ============================================================================ 
+##         OUTPUT
+##
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Start
+#
+if( $output eq 'html' ) {
+    print $q->header, "\n";
+    if( $showHoldings || $showAbout || $showDetailedHoldings ){
+	    print $q->start_html( -title => $title ), "\n";
+    } elsif( $autoRefresh ) {
+        my $content = join( '', '65,', $web_start_page, '?sta=', $station_to_plot, '&what=', $plot_type );
+	    print $q->start_html( -title => $title, -head => $q->meta( {-http_equiv=>'REFRESH',-content=>$content}) ), "\n";
+    } else {
+	    print $q->start_html( -title => $title ), "\n";
+    }
+	print "<TT>\n";
+} else {
+	print $title, "\n";
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Debugging output
+#
+if( $debug ) {
+
+	print "station_to_plot: ", $station_to_plot, "\n";
+	print $break;
+	print "date_to_plot: ", $date_to_plot, "\n";
+	print $break;
+	print $break;
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Form with inputs for plot types and date
+#
+if( $output eq 'html' ) {
+		print $q->start_form( -action => $web_start_page, -method => 'post' ), "\n";
+        if( $layout eq 'mobile' ){
+		    print $q->popup_menu( -name => 'what', -values => \@plot_types, -default=>$plot_type);
+        } else {
+		    print $q->popup_menu( -name => 'what', -values => \@plot_types, -labels => \%plot_types_nice, -default=>$plot_type);
+        }
+		print $gap;
+		print $q->popup_menu( -name => 'dateda', -values => \@days, -default=>substr($date_to_plot,6,2));
+		print $q->popup_menu( -name => 'datemo', -values => \@months, -default=>substr($date_to_plot,4,2));
+		print $q->popup_menu( -name => 'dateyr', -values => \@years, -default=>substr($date_to_plot,0,4));
+		print $gap;
+		print $q->submit( -name => 'submit' );
+		print $gap;
+        print $q->defaults('reset');
+        if( $layout ne 'mobile' ){
+		    print $gap;
+            print $q->submit( -name => 'submit', -value => 'holdings' );
+		    print $gap;
+            print $q->submit( -name => 'submit', -value => 'detailed holdings' );
+		    print $gap;
+            print $q->submit( -name => 'submit', -value => 'about' );
+        }
+        print $q->hidden( -name => 'sta', -value => $station_to_plot, -override=>1 );
+        print $q->hidden( -name => 'layout', -value => $layout, -override=>1 );
+        print $q->end_form, "\n";
+	    print $q->hr(), "\n";
+} else {
+	print "Form here\n";
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Find stations available for this date and plot_type
+#
+my @stations_to_plot = ();
+foreach my $fullfilename ( @image_files_all_sta ) {
+    my $filename = basename( $fullfilename );	
+    my $sta;
+    my $cha = '';
+    if( $plot_type eq 'strain' ){
+        my @bits = split /\./, $filename;
+        $sta = $bits[2];
+        $cha = $bits[3];
+    } elsif( $plot_type eq 'strainpan' ){
+        my @bits = split /\./, $filename;
+        $sta = $bits[0];
+    } elsif( $plot_type eq 'vlp' ){
+        my @bits = split /\./, $filename;
+        $sta = $bits[1];
+    } elsif( $plot_type eq 'helimulti' ){
+        my @bits = split /\./, $filename;
+        $sta = $bits[0];
+    } else {
+        my @bits = split /_/, $filename;
+        $sta = $bits[0];
+        $cha = $bits[1];
+    }
+    unless( grep {$_ eq $sta } @stations_to_plot) {
+        if( $cha ne '' ){
+            if ( grep( /$cha/, @bands) ) {
+		        push( @stations_to_plot, $sta);
+            }
+        } else {
+		    push( @stations_to_plot, $sta);
+        }
+    }
+}
+@stations_to_plot = sort @stations_to_plot;
+if( $debug ) {
+	print "stations_to_plot: ", join( ', ', @stations_to_plot ), "\n";
+	print $break;
+	print $break;
+}
+
+if( ($showHoldings + $showDetailedHoldings + $showAbout + $showLocked) == 0 ) {
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # print stations
+    #
+    my @stations_to_plot_MVO;
+    my @stations_to_plot_Oth;
+
+    if( $plot_type eq 'heli' || $plot_type eq 'heliwide' || $plot_type eq 'sgram' || $plot_type eq 'helisp' ){
+        @stations_to_plot_MVO = grep { /^M(B|S)/ } @stations_to_plot;
+        my %second = map {$_=>1} @stations_to_plot_MVO;
+        @stations_to_plot_Oth = grep { !$second{$_} } @stations_to_plot;
+
+        if( $layout eq 'normal' ) {
+            print "MVO stations:", $gap;
+        }
+        if( scalar( @stations_to_plot_MVO) == 0 ){ 
+            print "none";
+        }
+
+        foreach my $st (@stations_to_plot_MVO) {
+
+            my $link = sprintf( "%s?sta=%s&date=%s&what=%s&layout=%s", 
+		        $web_start_page, $st, $date_to_plot, $plot_type, $layout);
+
+            if( $station_to_plot eq $st ) {
+	            print $marker;
+            } else {
+	            print $space;
+            }
+            if( $output eq 'text' ){
+	            print $st; 
+            } else {
+	            print $q->a({href=>$link},$st);
+            }
+            if( $station_to_plot eq $st ) {
+	            print $marker;
+            } else {
+	            print $space;
+            }
+            print $gap;
+            if( $output eq 'html' ) {
+	            print "\n";
+            }
+        }
+        print $break;
+
+        if( $layout eq 'normal' ) {
+            print "Other stations:", $gap;
+        }
+        if( scalar( @stations_to_plot_Oth) == 0 ){ 
+            print "none";
+        }
+
+        foreach my $st (@stations_to_plot_Oth) {
+
+            my $link = sprintf( "%s?sta=%s&date=%s&what=%s&layout=%s", 
+		        $web_start_page, $st, $date_to_plot, $plot_type, $layout );
+
+            if( $station_to_plot eq $st ) {
+	            print $marker;
+            } else {
+	            print $space;
+            }
+            if( $output eq 'text' ){
+	            print $st; 
+            } else {
+	            print $q->a({href=>$link},$st);
+            }
+            if( $station_to_plot eq $st ) {
+	            print $marker;
+            } else {
+	            print $space;
+            }
+            print $gap;
+            if( $output eq 'html' ) {
+	            print "\n";
+            }
+        }
+        print $break;
+    
+
+    } else {
+
+        if( $layout eq 'normal' ) {
+            print "Stations:", $gap;
+        }
+        if( scalar( @stations_to_plot) == 0 ){ 
+            print "none";
+        }
+
+        foreach my $st (@stations_to_plot) {
+
+            my $link = sprintf( "%s?sta=%s&date=%s&what=%s&layout=%s", 
+		        $web_start_page, $st, $date_to_plot, $plot_type, $layout );
+
+            if( $station_to_plot eq $st ) {
+	            print $marker;
+            } else {
+	            print $space;
+            }
+            if( $output eq 'text' ){
+	            print $st; 
+            } else {
+	            print $q->a({href=>$link},$st);
+            }
+            if( $station_to_plot eq $st ) {
+	            print $marker;
+            } else {
+	            print $space;
+            }
+            print $gap;
+            if( $output eq 'html' ) {
+	            print "\n";
+            }
+        }
+        print $break;
+
+    }
+
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # Set dates as serial numbers
+    #
+    my $sec_in_day = 60 * 60 * 24;
+    $year = substr( $today, 0, 4 );
+    $month = substr( $today, 4, 2 );
+    $day = substr( $today, 6, 2 );
+    my $daynum_today = int( timegm(0,0,0,$day,$month-1,$year-1900) / $sec_in_day );
+    $year = substr( $date_to_plot, 0, 4 );
+    $month = substr( $date_to_plot, 4, 2 );
+    $day = substr( $date_to_plot, 6, 2 );
+    my $daynum_date_to_plot = int( timegm(0,0,0,$day,$month-1,$year-1900) / $sec_in_day );
+
+    my $days_ahead = ($daynum_today - $daynum_date_to_plot);
+    if( $days_ahead > int( $days_to_show/2 ) ) {
+        $days_ahead = int( $days_to_show/2 );
+    }
+
+    for(my $i=0;$i<$days_to_show;$i++) {
+        my $iday = $daynum_date_to_plot + $days_ahead - $i;
+        my ($year, $month, $day) = (gmtime($iday*$sec_in_day))[5,4,3];
+        $year = 1900 + $year;
+        $month++;
+        my $date = sprintf( '%04s%02s%02s', $year, $month, $day );
+	
+        $dates[$i] = $date;
+    }
+    if( $dates[0] ne $today ) {
+        @dates = ($today,@dates);
+    }
+
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # print dates for all layouts
+    #
+    if( $layout eq 'normal' ) {
+        print "Date:", $gap;
+    }
+
+    foreach my $date ( @dates ) {
+
+        my $link = sprintf( "%s?sta=%s&date=%s&what=%s&layout=%s", 
+		    $web_start_page, $station_to_plot, $date, $plot_type, $layout );
+
+        my $month = substr( $date, 4, 2 );
+        my $day = substr( $date, 6, 2 );
+        my $date_nice = join ( '/', $day, $month );
+        if( $date eq $today ){
+            $date_nice = 'today';    
+        }
+
+        if( $date eq $date_to_plot) {
+	        print $marker;
+        } else {
+	        print $space;
+        }
+        if( $output eq 'text' ) {
+	        print $date_nice;
+        } else {
+	        print $q->a({href=>$link},$date_nice);
+        }
+        if( $date eq $date_to_plot) {
+	        print $marker;
+        } else {
+	        print $space;
+        }
+        print $gap;
+        if( $output eq 'html' ) {
+	        print "\n";
+        }
+    }
+    print $break;
+    if( $output eq 'html' ){
+        print "<HR>\n";
+    }
+
+}
+
+
+if( $showHoldings ){
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # Holdings
+    #
+    ###############################################################################
+    #### SECOND MASSIVE CLUDGE
+    #
+    # If you have a pair of BB and SP, drop the SP
+    #
+    if( $plot_type eq 'helisp' ){ 
+        my %holdings_dates_tmp;
+        foreach my $stachan (keys %holdings_dates){
+            if( $stachan =~ /SHZ|EHZ|MHZ/ ){
+                $holdings_dates_tmp{ $stachan } = $holdings_dates{ $stachan };
+            }
+        }
+        %holdings_dates = %holdings_dates_tmp;
+    }elsif( $plot_type eq 'heli' ){ 
+        my %holdings_dates_tmp;
+        my @stachanKeys = keys %holdings_dates;
+        foreach my $stachan (@stachanKeys){
+            if( $stachan =~ /SHZ|EHZ/ ){
+                my $stachan2 = $stachan;
+                $stachan2 =~ s/SHZ/BHZ/g;
+                $stachan2 =~ s/EHZ/HHZ/g;
+			    if( index( $stachan2, @stachanKeys ) == -1 ) {
+                    $holdings_dates_tmp{ $stachan } = $holdings_dates{ $stachan };
+                }
+            } else {
+                $holdings_dates_tmp{ $stachan } = $holdings_dates{ $stachan };
+            }
+
+        }
+        %holdings_dates = %holdings_dates_tmp;
+    }
+
+    ###############################################################################
+    #### END OF SECOND MASSIVE CLUDGE
+    
+    
+    my $stachannet;
+    if( $plot_type eq 'strain' ){
+        $stachannet = 'net.sta.cha';
+    } elsif( $plot_type eq 'strainpan' ){
+        $stachannet = 'station';
+    } elsif( $plot_type eq 'helimulti' ){
+        $stachannet = 'stations';
+    } elsif( $plot_type eq 'vlp' ){
+        $stachannet = 'components';
+    } else {
+        $stachannet = 'sta_cha_net';
+    }
+    print "Submit form again to get back to plots", $break, $break;
+    print "Plot holdings (excluding today) for: $plot_types_nice{$plot_type}", $break,$break;
+    my $line_fmt = "%-16s    %-10s    %-10s";
+    if( $plot_type eq 'helimulti' ){
+        $line_fmt = "%-59s    %-10s    %-10s";
+    }
+    my $line = sprintf $line_fmt, $stachannet, 'earliest', 'latest';
+	if( $output eq 'html' ) {
+		$line =~ s/\s/$space/g;;
+	}
+    print $line, $break;
+
+    foreach my $stachan (sort keys %holdings_dates){
+        my @dates = @{$holdings_dates{$stachan}};
+        my $dateBeg = join( '/', substr($dates[0],6,2), substr($dates[0],4,2), substr($dates[0],0,4) );
+        my $dateEnd = join( '/', substr($dates[1],6,2), substr($dates[1],4,2), substr($dates[1],0,4) );
+        $line = sprintf $line_fmt, $stachan, $dateBeg, $dateEnd;
+	    if( $output eq 'html' ) {
+		    $line =~ s/\s/$space/g;;
+	    }
+        print $line, $break;
+    }
+	if( $output eq 'html' ) {
+		print "\n";
+	}
+
+
+} elsif( $showDetailedHoldings) {
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # Detailed hodlings for this plot type and station
+    #
+    print "Submit form again to get back to plots.", $break, $break;
+    print "All $plot_type plots available for $station_to_plot (excluding today).", $break, $break;
+    $file_holdings =~ s/\.txt$/_detailed\.txt/;
+    open my $handle, '<', $file_holdings;
+    chomp( my @lines = <$handle> );
+    close $handle;
+    foreach my $line( @lines ) {
+        if( $line =~ /^$plot_type\s+$station_to_plot/ ){
+            if( $output eq 'html' ) {
+    	        $line =~ s/\s/$space/g;;
+    	    }        
+            print $line, $break; 
+        }
+    }
+
+
+
+} elsif( $showAbout ) {
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # About
+    #
+    print "Submit form again to get back to plots.", $break, $break;
+    open my $handle, '<', $file_about;
+    chomp( my @lines = <$handle> );
+    close $handle;
+    foreach my $line( @lines ) {
+        if( $output eq 'html' ) {
+		    $line =~ s/\s/$space/g;;
+    	}        
+        print $line, $break; 
+    }
+
+} elsif( $showLocked ) {
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # Locked
+    #
+    print "Search is not possible as database is being updated.", $break;
+    print "Submit form again after a few minutes.", $break, $break;
+} else {
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # Images 
+    #
+    if( $autoRefresh && $layout ne 'mobile' ) {
+        print "This page refreshes automatically every minute.", $break;
+    }
+    if( $date_to_plot eq $today && $layout ne 'mobile' ) {
+        print "If the image is missing or incomplete, please wait for the refresh or try another station.", $break;
+    }
+
+
+    # show image file(s)
+    if( $n_image_files == 0 ) {
+	    print "No matching image files found", $break, "\n";
+    } else {
+	    foreach my $image_file ( @image_files ) {
+		    if( $output eq 'text' ){
+		        print $image_file, "\n";
+		    } else {
+
+                # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+                # Check if image file is OK 
+                #
+                my $exifTool = Image::ExifTool->new;
+                my @ioTagList = qw( filename Error Warning );
+                my $info = $exifTool->ImageInfo($image_file, \@ioTagList);
+                if( $debug ){
+                    foreach my $key (keys %$info){
+                        print "$key: $$info{$key}", $break;
+                    }
+                }
+                if( defined $$info{'Error'} || defined $$info{'Warning'} ){
+                    print $break, "Image file is corrupt or incomplete.", $break;
+                    foreach my $key (keys %$info){
+                        print "$key: $$info{$key}", $break;
+                    }
+                } else {
+		            my $image_file_web = $image_file;
+		            if( index( $image_file_web, 'earthworm00' ) != -1 ) {
+                        # notWebobs and Webobs have differing mount points
+                        if( $ENV{'SERVER_PORT'} eq '8080' ){
+                            $image_file_web =~ s/^.*monitoring_data/\/earthworm00/;
+                        } else {
+                            $image_file_web =~ s/^.*monitoring_data/\/monitoring/;
+                        }
+		            } else {
+                        if( $ENV{'SERVER_PORT'} eq '8080' ){
+                            $image_file_web =~ s/^.*monitoring_data/\/mvofls2\/monitoring_data/;
+                        } else {
+                            $image_file_web =~ s/^.*monitoring_data/\/seismic\/monitoring_data/;
+                        }
+		            }
+
+                    if( scalar(@image_files) > 1 ) {
+                        print $q->a({href=>$image_file_web}, img {src=>$image_file_web, align=>"LEFT", width=>"500", border=>"0"});
+                    } else {
+                        if( $layout eq 'mobile') {
+                            print $q->a({href=>$image_file_web}, img {src=>$image_file_web, align=>"LEFT", width=>"100%", border=>"0"});
+                        } elsif( $plot_type eq 'heli' || $plot_type eq 'helisp' || $plot_type eq 'sgram' || $plot_type eq 'helidisp' || $plot_type eq 'infra' ) {
+                            #print $q->a({href=>$image_file_web}, img {src=>$image_file_web, align=>"LEFT", width=>"100%", border=>"0"});
+                            print $q->a({href=>$image_file_web}, img {src=>$image_file_web, align=>"LEFT", height=>"100%", border=>"0"});
+                        } else {
+                            print $q->a({href=>$image_file_web}, img {src=>$image_file_web, align=>"LEFT", width=>"100%", border=>"0"});
+                        }
+                    }
+		            if( $debug ) {
+			            print $image_file, $break;
+			            print $image_file_web, $break;
+		            }
+                }
+            }
+	    }
+    }
+
+
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# End of web page
+if( not $debug ) {
+    print "</TT>\n";
+    print $q->end_html;
+}

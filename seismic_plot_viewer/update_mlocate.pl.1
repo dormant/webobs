@@ -1,0 +1,73 @@
+#!/usr/bin/env perl
+#
+# Perl script to update databases used in seismic_plot_viewer.cgi
+# Runs once a day
+# a convenient form
+#
+# Rod Stewart, UWI/SRC, 2021-06-24
+
+use strict;
+use warnings;
+use Sys::Hostname;
+
+
+
+my $dir_data; 			# Where we look for data in file hierarchy
+
+# Variables used in looking for plots
+my $plot_type;
+my $share_data;			# where data is shared, usually two choices
+
+# Choices for above variables
+my @plot_types = qw( heli heliwide sgram pan helimulti heliscan helidisp vlp strain strainpan );
+
+# Set up directories using function
+my ($sdRef, $ptdRef) = setDataDir();
+my @shares_data = @$sdRef;
+my %plot_type_dirs = %$ptdRef;
+
+
+for $plot_type (@plot_types) {
+
+	for $share_data (@shares_data) {
+
+		$dir_data = join( '/', $share_data, $plot_type_dirs{ $plot_type } );
+		my $dbfile = join( '/', $dir_data, '.dbfile' );
+		$dbfile =~ s/^\///;
+		$dbfile =~ s/\/\./\./;
+		$dbfile =~ s/\//_/g;
+		my $command = join( ' ', '/usr/bin/updatedb -v -l 0 -U', $dir_data, '-o', $dbfile );
+        print $command, "\n";
+		system( $command );
+		
+	}
+
+}
+
+
+# Function to set up directories
+sub setDataDir {
+
+    my $hostname;           # Machine being run on, set to either 'webobs' or 'opsproc3'
+    $hostname = hostname();
+
+    my @shares_data;
+    if( $hostname eq 'opsproc3' ){
+        @shares_data = qw( /mnt/earthworm3/monitoring_data /mnt/mvofls2/Seismic_Data/monitoring_data );
+    } else {
+        @shares_data = qw( /mnt/earthworm00/monitoring_data /mnt/mvofls2/Seismic_Data/monitoring_data );
+    }
+
+	my %plot_type_dirs = ( 	'heli' => 'helicorder_plots',
+				'heliwide' => 'helicorder_plots_wide',
+				'sgram' => 'sgram',
+				'pan' => 'pan_plots',
+				'helimulti' => 'helicorder_plots_multi',
+				'heliscan' => 'helicorder_plots_scanned',
+				'helidisp' => 'helicorder_plots_displacement',
+				'strain' => 'strain_plots',
+				'strainpan' => 'strain_pan_plots',
+                'vlp' => 'vlp_plots' );
+
+	return( \@shares_data, \%plot_type_dirs );
+}

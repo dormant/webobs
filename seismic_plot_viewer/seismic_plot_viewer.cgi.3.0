@@ -1,0 +1,754 @@
+#!/usr/bin/env perl
+#
+# Perl script to serve a web page to view seismic plot files in
+# a convenient form
+#
+# Version 1.1, for webobs installation
+# Version 1.2, adds pan_plot functionality
+# Version 1.3, larger fonts for Blackberriers in concise mode
+# Version 2.0, tidied up lots
+# Version 3.0, totally rewritten for updated seismic monitoring system
+#
+# Rod Stewart, UWI/SRC/MVO, 2021-06-25
+#
+#
+# The call to this is in /mvo/webobs/CONFIG/MENU.config
+
+use strict;
+use warnings;
+use CGI;
+use CGI qw/:standard/;
+use Time::Local;
+use File::Basename;
+use List::Uniq ':all';                              # COMMENT OUT FOR WEBOBS
+#use CGI::Carp qw/fatalsToBrowser/;                  # COMMENT OUT FOR OPSPROC3
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Variables for testing and debugging, edit as appropriate
+#
+
+my $hostname;			# Machine being run on, set manually to either 'webobs' or 'opsproc3'
+$hostname = 'opsproc3';
+
+my $input;			# Input is either 'cmd' (command line) or 'href' 
+$input = 'cmd';
+
+my $output;			# Output is either "html" or "text"
+$output = 'text';
+
+my $debug;			# extra output for debugging
+$debug = 0;
+
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Directories and file
+#
+my $dir_data; 			# Where we look for data in file hierarchy
+my $dir_dbfile; 		# Location of mlocate databases 
+my $dbfile;			# mlocate database file
+my $file_networks;		# File with list of stations and channels for each network
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Variables
+#
+# Variables used in searching for plots
+#
+my $station_to_plot;
+my $station_search_string;
+my $band_to_plot;
+my $date_to_plot;
+my $dateda;
+my $datemo;
+my $dateyr;
+my $network;
+my $plot_type;                  # "heli", "heliwide", "sgram", "pan", "helimulti" or "heliscan"
+my $layout;			# "normal" or "mobile" or "summary"
+my $share_data;			# where data is shared, usually two choices
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# SET THIS FOR MOBILE VERSION
+#
+#$layout = 'mobile';
+
+
+# Choices for above variables
+#
+my @stations_to_plot;
+my %stations_to_search;
+
+my @layouts = qw( normal mobile summary );
+
+my @plot_types = qw( heli sgram pan heliwide helimulti heliscan helidisp );
+my %plot_types_nice = (	'heli' => 'Helicorder',
+			'sgram' => 'Spectrogram',
+			'pan' => 'Pan plot',
+			'heliwide' => 'Wide helicorder',
+			'helimulti' => 'Multiple helicorder',
+			'heliscan' => 'Scanned helicorder',
+			'helidisp' => 'Displacement helicorder' );
+
+my @band_types = qw( seis seissp infra );
+my %band_types_nice = (	'seis' => 'Seismic',
+			'seissp' => 'Seismic short-period',
+			'infra' => 'Infrasound' );
+
+my @networks = qw( mvo stvin dom reg mvoall turk );
+my %networks_nice = ( 	'mvo' => 'MVO',
+			'stvin' => 'St Vincent',
+			'dom' => 'Dominica',
+			'reg' => 'Regional',
+			'mvoall' => 'MVO all',
+			'turk' => 'Turkey' );
+	
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Start web page object
+#
+my $q = CGI->new;
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Set variables
+#
+# Read variables 
+#
+if( $input eq 'cmd' ) {
+	($network, $station_to_plot, $band_to_plot, $date_to_plot, $plot_type, $layout) = @ARGV;
+} else {
+	$network = $q->param('net');
+	$station_to_plot = $q->param('sta');
+	$band_to_plot = $q->param('band');
+	$dateda = $q->param('dateda');
+	$datemo = $q->param('datemo');
+	$dateyr = $q->param('dateyr');
+	if( defined $dateda ) {
+		$date_to_plot = join( '-', $dateyr, $datemo, $dateda );
+	}
+	$plot_type = $q->param('what');
+	$layout = $q->param('layout');
+}
+
+# Default values
+#
+if( not defined $network ) {
+	$network = 'mvo';
+}
+if( not defined $band_to_plot ) {
+	$date_to_plot = 'seismic';
+}
+if( not defined $date_to_plot ) {
+	$date_to_plot = 'today';
+}
+if( not defined $plot_type ) {
+	$plot_type = 'heli';
+}
+if( not defined $layout ) {
+	$layout = 'normal';
+}
+
+
+# Default stations to plot
+#
+my %default_stations_to_plot = (	'mvo' 		=> 'MBLY',
+					'mvoall'	=> 'MBGH',
+					'stvin'		=> 'SVV',
+					'dom'		=> 'DWS',
+					'reg'		=> 'ANWB',
+					'turk'		=> 'TRC2'  );
+					
+if( not defined $station_to_plot ) {
+	$station_to_plot = $default_stations_to_plot{ $network };
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Define stations and searches for this network
+#
+if( $hostname eq 'opsproc3' ) {
+	$file_networks = 'networks.txt';
+	$dir_dbfile = '.';
+} else {
+	$file_networks = '/home/webobs/src/seismic_plot_viewer/networks.txt';
+	$dir_dbfile = '/home/webobs/src/seismic_plot_viewer';
+}
+
+open my $handle, '<', $file_networks;
+chomp( my @lines = <$handle> );
+#chomp( my @lines = <DATA> );
+close $handle;
+
+foreach my $line( @lines ) {
+		
+	my @chunks = split /\s+/, $line;
+
+	if( $chunks[0] eq $network ) {
+
+		my $station = $chunks[1];
+
+		push @stations_to_plot, $station;
+			
+		my @searches = @chunks[2..$#chunks];
+		if( scalar @searches > 1 ) {	
+			$stations_to_search{$station} = '(' . join( '|', @searches ) . ')';
+		} else {
+			$stations_to_search{$station} = $searches[0];
+		}
+		
+	}
+
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Check if variables are in scope
+#
+die( "Bad network: $network" ) unless( grep { $_ eq $network } @networks ); 
+die( "Bad station: $station_to_plot" ) unless( grep { $_ eq $station_to_plot } @stations_to_plot ); 
+die( "Bad plot type: $plot_type" ) unless( grep { $_ eq $plot_type } @plot_types ); 
+die( "Bad layout: $layout " ) unless( grep { $_ eq $layout} @layouts ); 
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Variables used in output
+my $web_start_page = '/cgi-bin/seismic_plot_viewer.cgi';
+my $title = 'Seismic Plots'; 
+my $gap;			# Gaps used when listing header elements
+my $lgap;			# Number of spaces in a gap
+my $break;			# New line
+my $marker;			# Symbol to marker header element in use
+my $space;			# Single space
+my $plot_width;      		# Width of plot on page
+my $days_to_show;		# Number of days to offer as links
+my @dates = ();
+
+if( $layout eq 'mobile' ) {
+	$lgap = 1;
+} else {
+	$lgap = 2;
+}
+
+if( $output eq 'text' ) {
+	$break = "\n";
+	$marker = '*';
+	$space = ' ';
+ 	$gap = $space x $lgap;
+} else {
+	$break = "\n<BR>\n";
+	$marker = '<FONT COLOR="#FF0000">*</FONT>';
+	$space = '&nbsp;';
+ 	$gap = $space x $lgap;
+}
+
+if( $plot_type eq 'pan' ) {
+	$plot_width = 852;
+} else {
+	$plot_width = 500;
+}
+
+if( $layout eq 'normal' ) {
+	$days_to_show = 11;
+} else {
+	$days_to_show = 11;
+}
+	
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Get todays date and time (UTC)
+#
+my ($year, $month, $day) = (gmtime())[5,4,3];
+$year = 1900 + $year;
+$month++;
+my $today = sprintf( '%04s-%02s-%02s', $year, $month, $day );
+if( $date_to_plot eq 'today' ) {
+	$date_to_plot = $today;
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Set up arrays for select menus
+#
+my $years_in_dir = ($year - 1996 + 1);
+my @months = qw( 01 02 03 04 05 06 07 08 09 10 11 12 );
+my @days = qw( 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 );
+my @years = ();
+for( my $i=$year; $i>$year-$years_in_dir; $i-- ) {
+	push( @years, sprintf( '%04s', $i ) );
+}
+
+
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Set up share directories for search
+#
+my @shares_data;
+if( $hostname eq 'opsproc3' ) {
+	@shares_data = qw( /mnt/earthworm3/monitoring_data /mnt/mvofls2/Seismic_Data/monitoring_data );
+} else {
+	@shares_data = qw( /mnt/earthworm00/monitoring_data /mnt/mvofls2/Seismic_Data/monitoring_data );
+}
+
+my %plot_type_dirs = ( 	'heli' => 'helicorder_plots',
+			'heliwide' => 'helicorder_plots_wide',
+			'sgram' => 'sgram',
+			'pan' => 'pan_plots',
+			'helimulti' => 'helicorder_plots_multi',
+			'heliscan' => 'helicorder_plots_scanned',
+			'helidisp' => 'helicorder_plots_displacement' );
+
+
+# Search string for station
+#
+if( $plot_type eq 'helimulti' ) {
+	$station_search_string = 'MSS1_MBLY';
+} else {
+	$station_search_string = $stations_to_search{ $station_to_plot };
+}
+
+
+# array of matching image files
+#
+my @image_files = ();
+
+
+# Search over all shares
+#
+for $share_data (@shares_data) {
+
+	# Search directory based on plot type
+	$dir_data = join( '/', $share_data, $plot_type_dirs{ $plot_type } );
+
+	# Date string for searching
+	my $date_to_search = $date_to_plot;
+	$date_to_search =~ s/\-//g;
+
+	# Appropriate mlocate database
+	$dbfile = join( '/', $dir_data, '.dbfile' );
+	$dbfile =~ s/^\///;
+	$dbfile =~ s/\/\./\./;
+	$dbfile =~ s/\//_/g;
+	$dbfile = join( '/', $dir_dbfile, $dbfile );
+
+	# Find matching image files 
+	my $command;
+	if( $layout eq 'summary' ) {
+		$command = join( ' ', '/usr/bin/mlocate -q -d', $dbfile, '--regex -i', 
+			'".*(\.gif|\.png|\.tif)"' );
+	} else {
+		$command = join( ' ', '/usr/bin/mlocate -q -d', $dbfile, '--regex -i', 
+			join( '',  '".*', $station_search_string, '.*\.', $date_to_search, '.*(\.gif|\.png|\.tif)"' ) );
+	}
+	my @image_files_part = `$command`;
+	chomp @image_files_part;
+	push( @image_files, @image_files_part );
+
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Find unique files in different directories
+#
+my $n_image_files = scalar( @image_files );
+
+if( $n_image_files > 1 ) {
+	my @image_files_uniq = ();
+	my @filenames = ();
+	foreach my $fullfilename ( @image_files ) {
+		my $filename = basename( $fullfilename );	
+		unless( grep {$_ eq $filename } @filenames) {
+			push( @filenames, $filename );
+			push( @image_files_uniq, $fullfilename );
+		}
+	}
+	@image_files = @image_files_uniq;
+}
+			
+$n_image_files = scalar( @image_files );
+	 
+
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Output
+#
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# start
+#
+if( $output eq 'html' ) {
+	print $q->header, "\n";
+	print $q->start_html( -title => $title, -head => $q->meta( {-http_equiv=>'REFRESH',-content=>'60'}) ), "\n";
+	print "<TT>\n";
+} else {
+	print $title, "\n";
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Debugging output
+#
+if( $debug ) {
+
+	print "dbfile: ", $dbfile, "\n";
+	print $break;
+	print "station_to_plot: ", $station_to_plot, "\n";
+	print $break;
+	print "date_to_plot: ", $date_to_plot, "\n";
+	print $break;
+	print $break;
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Form with inputs for plot types, network and date
+#
+if( $output eq 'html' ) {
+		print $q->start_form( -action => $web_start_page, -method => 'post' ), "\n";
+		print $q->popup_menu( -name => 'what', -values => \@plot_types, -labels => \%plot_types_nice, -default=>$plot_type);
+		print $gap;
+		print $q->popup_menu( -name => 'net', -values => \@networks, -labels => \%networks_nice, -default=>$network );
+		print $gap;
+		print $q->popup_menu( -name => 'dateda', -values => \@days, -default=>substr($date_to_plot,8,2));
+		print $q->popup_menu( -name => 'datemo', -values => \@months, -default=>substr($date_to_plot,5,2));
+		print $q->popup_menu( -name => 'dateyr', -values => \@years, -default=>substr($date_to_plot,0,4));
+		print $break;
+		print $q->submit( -name => 'submit' );
+		print $q->end_form, "\n";
+		print $q->hr(), "\n";
+} else {
+	print "Form for: Plot Network Date\n";
+}
+
+=pod
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# print plot types
+#
+if( $layout eq 'normal' ) {
+	print "Plot:", $gap;
+}
+foreach my $pt (@plot_types) {
+
+	my $link = sprintf( "%s?net=%s&sta=%s&date=%s&what=%s&layout=%s", 
+			$web_start_page, $network, $station_to_plot, $date_to_plot, $pt, $layout );
+
+	my $ptt = $pt;
+	if( $layout eq 'normal' ) {
+		$ptt = $plot_types_nice{$pt};
+	}
+
+	if( $plot_type eq $pt ) {
+		print $marker;
+	} else {
+		print $space;
+	}
+	if( $output eq 'text' ){
+		print $ptt; 
+	} else {
+		print $q->a({href=>$link},$ptt);
+	}
+	if( $plot_type eq $pt ) {
+		print $marker;
+	} else {
+		print $space;
+	}
+	print $gap;
+	if( $output eq 'html' ) {
+		print "\n";
+	}
+}
+print $break;
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Summary output
+# This is a totally different part, which attempts to summarise the available data for each plot_type
+
+if( $layout eq 'summary' ) {
+
+	my $image_file_first = '';
+	my $image_file_last = '';
+
+	print $break;
+	print "Summary of data available for plot type: $plot_type ($plot_types_nice{$plot_type})", $break;
+
+	my $line = sprintf( "%10s  %7s  %12s  %12s", 'sta (cha)', 'files', 'earliest', 'latest' );
+	if( $output eq 'html' ) {
+		$line =~ s/ /&nbsp;/g;
+	} 
+	print $line, $break;
+
+	# Checking all files
+	#
+	if( $n_image_files > 1 ) {
+
+		my @file_names = ();
+		my @file_stachas = ();
+		my @file_stas = ();
+		my @file_dates = ();
+
+		foreach my $fullfilename ( @image_files ) {
+	
+			my $filename = basename( $fullfilename );	
+			push( @file_names, $filename );
+
+			$filename =~ m/^(.+?)_(.+?)_.*\.([0-9]{8}).*/;
+  			my $sta = $1;
+  			my $stacha = join( '_', $1, $2 );
+  			my $date = $3;
+
+			push( @file_stas, $sta );
+			push( @file_stachas, $stacha );
+			push( @file_dates, $date );
+
+		}
+
+		@file_dates = sort( @file_dates );
+		
+		my $iff = $file_dates[0];
+		my $ifl = $file_dates[-1];
+
+		$image_file_first = join( '-', substr( $iff, 0, 4 ), substr( $iff, 4, 2 ), substr( $iff, 6, 2 ) );
+		$image_file_last = join( '-', substr( $ifl, 0, 4 ), substr( $ifl, 4, 2 ), substr( $ifl, 6, 2 ) );
+
+		my $line = sprintf( "%10s  %7d  %12s  %12s", 'all', $n_image_files, $image_file_first, $image_file_last);
+		if( $output eq 'html' ) {
+			$line =~ s/ /&nbsp;/g;
+		} 
+		print $line, $break;
+
+		@file_stas =  uniq( @file_stas );                              # COMMENT OUT FOR WEBOBS
+		@file_stachas =  uniq( @file_stachas );                              # COMMENT OUT FOR WEBOBS
+		push( @file_stas, @file_stachas );
+
+		foreach my $code (sort @file_stas) {
+
+			my @file_matches = grep( /^$code/, @file_names ); 
+			my $n_file_matches = scalar( @file_matches );
+
+			my @match_dates = ();
+			foreach my $matchfile ( @file_matches ) {
+	
+				$matchfile =~ m/\.([0-9]{8})/;
+  				my $date = $1;
+
+				push( @match_dates, $date );
+
+			
+			}
+			@match_dates = sort( @match_dates );
+
+			my $mff = $match_dates[0];
+			my $mfl = $match_dates[-1];
+
+			my $match_file_first = join( '-', substr( $mff, 0, 4 ), substr( $mff, 4, 2 ), substr( $mff, 6, 2 ) );
+			my $match_file_last = join( '-', substr( $mfl, 0, 4 ), substr( $mfl, 4, 2 ), substr( $mfl, 6, 2 ) );
+
+			my $line = sprintf( "%10s  %7d  %12s  %12s", $code, $n_file_matches, $match_file_first, $match_file_last);
+			if( $output eq 'html' ) {
+				$line =~ s/ /&nbsp;/g;
+			} 
+			print $line, $break;
+
+		}
+			
+	} else {
+		my $line = sprintf( "%10s", 'all', $n_image_files );
+		if( $output eq 'html' ) {
+			$line =~ s/ /&nbsp;/g;
+		} 
+		print $line, $break;
+	}
+	goto CLOSE;
+
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# print networks
+#
+if( $layout eq 'normal' ) {
+	print "Network:", $gap;
+}
+foreach my $nw (@networks) {
+
+	my $link;
+	if( $network eq $nw ) {
+		$link = sprintf( "%s?net=%s&sta=%s&date=%s&what=%s&layout=%s", 
+			$web_start_page, $nw, $station_to_plot, $date_to_plot, $plot_type, $layout );
+	} else {
+		$link = sprintf( "%s?net=%s&sta=%s&date=%s&what=%s&layout=%s", 
+			$web_start_page, $nw, $default_stations_to_plot{ $nw }, $date_to_plot, $plot_type, $layout );
+	}
+
+	my $nwt = $nw;
+	if( $layout eq 'normal' ) {
+		$nwt = $networks_nice{$nw};
+	}
+
+	if( $network eq $nw ) {
+		print $marker;
+	} else {
+		print $space;
+	}
+	if( $output eq 'text' ){
+		print $nwt; 
+	} else {
+		print $q->a({href=>$link},$nwt);
+	}
+	if( $network eq $nw ) {
+		print $marker;
+	} else {
+		print $space;
+	}
+	print $gap;
+	if( $output eq 'html' ) {
+		print "\n";
+	}
+}
+print $break;
+=cut
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# print stations
+#
+if( $layout eq 'normal' ) {
+	print "Station:", $gap;
+}
+foreach my $st (@stations_to_plot) {
+
+	my $link = sprintf( "%s?net=%s&sta=%s&date=%s&what=%s&layout=%s", 
+			$web_start_page, $network, $st, $date_to_plot, $plot_type, $layout );
+
+	if( $station_to_plot eq $st ) {
+		print $marker;
+	} else {
+		print $space;
+	}
+	if( $output eq 'text' ){
+		print $st; 
+	} else {
+		print $q->a({href=>$link},$st);
+	}
+	if( $station_to_plot eq $st ) {
+		print $marker;
+	} else {
+		print $space;
+	}
+	print $gap;
+	if( $output eq 'html' ) {
+		print "\n";
+	}
+}
+print $break;
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Set dates as serial numbers
+#
+my $sec_in_day = 60 * 60 * 24;
+( $year, $month, $day ) = split( /-/, $today );
+my $daynum_today = int( timegm(0,0,0,$day,$month-1,$year-1900) / $sec_in_day );
+( $year, $month, $day ) = split( /-/, $date_to_plot );
+my $daynum_date_to_plot = int( timegm(0,0,0,$day,$month-1,$year-1900) / $sec_in_day );
+
+my $days_ahead = ($daynum_today - $daynum_date_to_plot);
+if( $days_ahead > int( $days_to_show/2 ) ) {
+	$days_ahead = int( $days_to_show/2 );
+}
+
+for(my $i=0;$i<$days_to_show;$i++) {
+	my $iday = $daynum_date_to_plot + $days_ahead - $i;
+	my ($year, $month, $day) = (gmtime($iday*$sec_in_day))[5,4,3];
+	$year = 1900 + $year;
+	$month++;
+	my $date = sprintf( '%04s-%02s-%02s', $year, $month, $day );
+	
+	$dates[$i] = $date;
+}
+if( $dates[0] ne $today ) {
+	@dates = ($today,@dates);
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# print dates for all layouts
+#
+if( $layout eq 'normal' ) {
+	print "Date:", $gap;
+}
+
+foreach my $date ( @dates ) {
+
+	my $link = sprintf( "%s?net=%s&sta=%s&date=%s&what=%s&layout=%s", 
+			$web_start_page, $network, $station_to_plot, $date, $plot_type, $layout );
+
+	my ($year, $month, $day) = split( /-/, $date );
+	my $date_nice = join ( '/', $day, $month );
+
+	if( $date eq $date_to_plot) {
+		print $marker;
+	} else {
+		print $space;
+	}
+	if( $output eq 'text' ) {
+		print $date_nice;
+	} else {
+		print $q->a({href=>$link},$date_nice);
+	}
+	if( $date eq $date_to_plot) {
+		print $marker;
+	} else {
+		print $space;
+	}
+	print $gap;
+	if( $output eq 'html' ) {
+		print "\n";
+	}
+}
+print $break;
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Images 
+#
+print "This page refreshes automatically every minute", $break;
+
+# show image file(s)
+if( $n_image_files == 0 ) {
+	print "No matching image files found", $break, "\n";
+} else {
+	foreach my $image_file ( @image_files ) {
+		if( $output eq 'text' ){
+			print $image_file, "\n";
+		} else {
+			my $image_file_web = $image_file;
+			if( index( $image_file_web, 'earthworm00' ) ) {
+				$image_file_web =~ s/^.*monitoring_data/\/earthworm00/;
+			} else {
+				$image_file_web =~ s/^.*monitoring_data/\/mvofls2\/monitoring_data/;
+			}
+
+			print $q->a({href=>$image_file_web}, img {src=>$image_file_web, align=>"LEFT", width=>"100%", border=>"0"});
+			if( $debug ) {
+				print $image_file, $break;
+				print $image_file_web, $break;
+			}
+		}
+	}
+}
+
+
+
+CLOSE:
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# End of web page
+if( $layout eq 'html' ) {
+	print "</TT>\n";
+	print $q-end_html;
+}

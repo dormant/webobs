@@ -1,0 +1,92 @@
+reg           ABD  ABD_HHZ
+reg          ANWB  ANWB_BHZ
+reg          BBGH  BBGH_BHZ
+reg          GRGR  GRGR_BHZ
+mvoall       MBBE
+mvoall       MBET
+mvo          MBBY  MBBY_HHZ  MBBY_BHZ
+mvosp        MBBY  MBBY_EHZ  MBBY_SHZ
+mvoall       MBBY  MBBY_BHZ  MBBY_HHZ  MBBY_SHZ  MBBY_EHZ
+mvoall       MBFL  MBFL_HHZ  MBFL_BHZ  MBFL_SHZ  MBFL_EHZ
+mvo          MBFL  MBFL_HHZ  MBFL_SHZ
+mvosp        MBFL  MBFL_EHZ  MBFL_SHZ
+mvoall       MBFR  MBFR_HHZ  MBFR_BHZ  MBFR_EHZ  MBFR_SHZ
+mvo          MBFR  MBFR_HHZ  MBFR_BHZ
+mvosp        MBFR  MBFR_EHZ  MBFR_SHZ
+mvoall       MBGA  MBGA_BHZ
+mvoall       MBGB  MBGB_BHZ  MBGB_EDF  MBGB_EHZ  MBGB_HDF  MBGB_HHZ  MBGB_SHZ
+mvo          MBGB  MBGB_BHZ  MBGB_HHZ
+mvosp        MBGB  MBGB_EHZ  MBGB_SHZ
+mvoall       MBGE  MBGE_BHZ
+mvoall       MBGH  MBGH_BHZ  MBGH_EDF  MBGH_EHZ  MBGH_HDF  MBGH_HH1  MBGH_HH2  MBGH_HHZ  MBGH_PR1
+mvo          MBGH  MBGH_BHZ  MBGH_HHZ
+mvosp        MBGH  MBGH_EHZ  
+mvoall       MBHA  MBHA_BHZ  MBHA_SHZ
+mvo          MBHA  MBHA_BHZ  MBHA_SHZ
+mvosp        MBHA  MBHA_SHZ
+mvoall       MBLG  MBLG_BHZ  MBLG_EDF  MBLG_EHZ  MBLG_HHZ  MBLG_SHZ
+mvo          MBLG  MBLG_BHZ  MBLG_HHZ
+mvosp        MBLG  MBLG_EHZ  MBLG_SHZ
+mvoall       MBLY  MBLY_BHZ  MBLY_EHZ  MBLY_HHZ
+mvo          MBLY  MBLY_BHZ  MBLY_HHZ
+mvosp        MBLY  MBLY_EHZ
+mvoall       MBMH  MBMH_SHZ
+mvoall       MBRV  MBRV_SHZ  MBRV_BHZ
+mvo          MBRV  MBRV_BHZ
+mvosp        MBRV  MBRV_SHZ
+mvoall       MBRY  MBRY_BHZ  MBRY_EHZ  MBRY_HHZ  MBRY_SHZ
+mvo          MBRY  MBRY_BHZ  MBRY_HHZ
+mvosp        MBRY  MBRY_EHZ  MBRY_SHZ
+mvoall       MBSS  MBSS_SHZ
+mvoall       MBW1  MBW1_EDF  MBW1_HDF
+mvoall       MBW2  MBW2_EDF  MBW2_HDF
+mvoall       MBW3  MBW3_EDF  MBW3_HDF
+mvoall       MBWH  MBWH_BHZ  MBWH_EHZ  MBWH_HHZ  MBWH_SHZ
+mvo          MBWH  MBWH_BHZ  MBWH_HHZ
+mvosp        MBWH  MBWH_EHZ  MBWH_SHZ
+mvoall       MBWW  MBWW_HHZ
+mvoall       MCPN  MCPN_SHZ
+mvoall       MCPT  MCPT_SHZ
+mvoall       MCPZ  MCPZ_SHZ
+dom          MDN    MDN_HHZ
+mvoall       MGAT  MGAT_SHZ
+mvoall       MGHZ  MGHZ_SHZ
+mvoall       MGT2  MGT2_SHZ
+mvoall       MHRE  MHRE_SHZ
+mvoall       MHRV  MHRV_SHZ
+mvoall       MLGT  MLGT_SHZ
+mvoall       MRYT  MRYT_SHZ
+mvoall       MSCP  MSCP_SHZ
+mvospid      MSCP  MSCP_SHZ
+mvoall       MSMX  MSMX_SHZ
+mvospid      MSMX  MSMX_SHZ
+mvoall       MSNW  MSNW_SHZ
+mvospid      MSNW  MSNW_SHZ
+mvoall       MSS1  MSS1_SHZ
+mvo          MSS1  MSS1_SHZ
+mvosp        MSS1  MSS1_SHZ
+mvospid      MSS1  MSS1_SHZ
+mvoall       MSUH  MSUH_SHZ
+mvospid      MSUH  MSUH_SHZ
+mvoall       MTAC  MTAC_BHZ
+mvoall       MTB1  MTB1_HHZ
+mvoall       MTB2  MTB2_HHZ
+mvoall       MTB3  MTB3_HHZ
+mvoall       MTB4  MTB4_HHZ
+mvoall       MTFL  MTFL_BHZ
+mvoall       MTGH  MTGH_HHZ
+mvoall       MTM2  MTM2_BHZ
+mvoall       MTWW  MTWW_BHZ
+mvoall       MVPE  MVPE_SHZ
+mvoall       MWHY  MWHY_SHZ
+mvoall       MWHZ  MWHZ_SHZ
+mvoall       OLV1  OLV1_BHZ
+reg           SVV  SVV_HHZ
+mvoall       TRNT  TRNT_BHZ
+cal          AIRS  AIRS.BLZ
+cal          OLV1  OLV1.BLZ
+vlp          VERT  VLP.V
+vlp          3C    VLP.3C
+helimult     MSS1_MBLY_MBBY_MBGH_MBFL  MSS1_MBLY_MBBY_MBGH_MBFL
+helimult     MSS1_MBFR_MBLG_MBLY_MBRY  MSS1_MBFR_MBLG_MBLY_MBRY
+helimult     MSS1_MBFR_MBLG_MBLY_MBRY_MBBY_MBHA_MBGH_MBWH_MBFL_MBGB_MBRV  MSS1_MBFR_MBLG_MBLY_MBRY_MBBY_MBHA_MBGH_MBWH_MBFL_MBGB_MBRV

@@ -1,0 +1,209 @@
+#!/usr/bin/perl
+#
+# Check holdings of different seismic plot types
+#
+# R.C.Stewart 2023-06-22
+
+use strict;
+use warnings;
+use Time::Local;
+use File::Spec;
+use List::MoreUtils qw(uniq);
+use Sys::Hostname;
+
+my $hostname;			# Machine being run on, set to either 'webobs' or 'opsproc3'
+$hostname = hostname();
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Get todays date and time (UTC)
+#
+my ($year, $month, $day) = (gmtime())[5,4,3];
+$year = 1900 + $year;
+$month++;
+my $today = sprintf( '%04s%02s%02s', $year, $month, $day );
+my $nextYear = $year + 1;
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Directories and file
+#
+my $dir_data; 			# Where we look for data in file hierarchy
+my $dir_dbfile; 		# Location of mlocate databases
+my $locateExe; 		    # Locate executable to be used
+my $dbfile;
+my $file_bands;		    # File with list of channels for each plot typeo
+my %bands_to_search;
+
+if( $hostname eq 'opsproc3' ){
+    $dir_data = '/mnt/mvofls2/Seismic_Data/monitoring_data';
+    $locateExe = '/usr/bin/locate';
+    $file_bands = 'bands.txt';
+    $dir_dbfile = '.';
+} else {
+    $dir_data = '/mnt/mvofls2/Seismic_Data/monitoring_data';
+    $locateExe = '/usr/bin/mlocate -q';
+    $file_bands= '/home/webobs/src/seismic_plot_viewer/bands.txt';
+    $dir_dbfile = '/home/webobs/src/seismic_plot_viewer';
+}
+
+
+my @plot_types = qw( heli helisp heliwide sgram pan helimulti heliscan helidisp vlp strain strainpan infra );
+
+my %plot_type_dirs = ( 	'heli' => 'helicorder_plots',
+	    'helisp' => 'helicorder_plots',
+	    'heliwide' => 'helicorder_plots_wide',
+		'sgram' => 'sgram',
+		'pan' => 'pan_plots',
+		'helimulti' => 'helicorder_plots_multi',
+		'heliscan' => 'helicorder_plots_scanned',
+		'helidisp' => 'helicorder_plots_displacement',
+		'infra' => 'helicorder_plots',
+        'strain' => 'strain_plots',
+        'strainpan' => 'strain_pan_plots',
+        'vlp' => 'vlp_plots' );
+
+open my $handle, '<', $file_bands;
+chomp( my @lines = <$handle> );
+close $handle;
+
+open(FH1, '>', 'holdings_detailed.txt' ) or die $!;
+
+foreach my $line( @lines ) {
+
+	my @chunks = split /\s+/, $line;
+	my @bands = @chunks[1..$#chunks];
+
+    my $bands_to_search;
+	if( scalar @bands > 1 ) {
+		$bands_to_search = '(' . join( '|', @bands) . ')';
+	} else {
+		$bands_to_search = $bands[0];
+	}
+
+    $bands_to_search{ $chunks[0] } = $bands_to_search;
+
+}
+$bands_to_search{ 'helimulti' } = '';
+$bands_to_search{ 'strainpan' } = '';
+
+#printf "%-12s  %s\n", 'plot_type', 'bands';
+#foreach my $plot_type (@plot_types) {
+#    printf "%-12s  %s\n", $plot_type, $bands_to_search{$plot_type};
+#}
+#printf "\n";
+
+foreach my $plot_type (@plot_types) {
+    #print $plot_type, "\n";
+
+    my @stachan= ();
+    my @image_files;
+    my @image_files_all;
+
+	my $dir_data_2 = join( '/', $dir_data, $plot_type_dirs{ $plot_type } );
+
+	# Appropriate mlocate database
+	$dbfile = join( '/', $dir_data_2, '.dbfile' );
+	$dbfile =~ s/^\///;
+	$dbfile =~ s/\/\./\./;
+	$dbfile =~ s/\//_/g;
+	$dbfile = join( '/', $dir_dbfile, $dbfile );
+
+    for (my $iyear = 1995; $iyear < $nextYear; $iyear++) {
+	    my $date_to_search = sprintf( "%4d", $iyear );
+
+	    # Find matching image files
+	    my $command;
+		$command = join( ' ', $locateExe, '-d', $dbfile, '--regex -i',
+            join( '', '"', 
+            join( '/',  $dir_data_2, sprintf("%4d",$iyear), 
+            join( '', '.*', $bands_to_search{ $plot_type }, '.*(\.gif|\.png)' ) ),
+            '"' ) );
+    #print $command, "\n";
+
+        @image_files = `$command`;
+	    chomp @image_files;
+
+        my $n_image_files = scalar( @image_files );
+
+        foreach my $image_file (@image_files) {
+            my ($volume,$directories,$file) = File::Spec->splitpath( $image_file );
+            my @separated = split /\./, $file;
+            if ($plot_type eq 'strain' && $iyear >= 2018) {
+                push @stachan, join( '.', $separated[1], $separated[2], $separated[3] );
+            } elsif ($plot_type eq 'vlp' ) {
+                push @stachan, join( '.', $separated[0], $separated[1] );
+            } else {
+                push @stachan, $separated[0];
+            }
+        }
+
+        push @image_files_all, @image_files;
+
+
+
+    }
+
+    my @stachan_uniq = uniq @stachan;
+    @stachan = @stachan_uniq;
+    if( $plot_type eq 'helisp' ) {
+        @stachan = grep { /(SHZ|EHZ|MHZ)/ } @stachan_uniq;
+    }elsif( $plot_type eq 'infra' ) {
+        @stachan = grep { /(EDF|HDF|PR1)/ } @stachan_uniq;
+    }elsif( $plot_type eq 'heli' ) {
+        foreach my $stacha (@stachan_uniq){
+            if (index($stacha, 'BHZ') != -1 && index($stacha,'MBHA') == 1) {
+                $stacha =~ s/BHZ/SHZ/;
+                @stachan= grep {!/$stacha/} @stachan;
+            } elsif (index($stacha, 'HHZ') != -1) {
+                $stacha =~ s/HHZ/EHZ/;
+                @stachan = grep {!/$stacha/} @stachan;
+            }
+        }
+    }
+
+    my $n_stachan = scalar( @stachan );
+    if ( $n_stachan > 0 ){
+        for (my $i = 0; $i < $n_stachan; $i++) {
+            my @all_dates;
+            my $sta;
+            my $stachan = $stachan[$i];
+            if( $plot_type eq 'helimulti' ) {
+               $sta =  $stachan[$i];
+            } elsif( $plot_type eq 'strain' ) {
+               my @parts = split /\./, $stachan;
+               $sta = $parts[1];
+            } elsif( $plot_type eq 'vlp' ) {
+               my @parts = split /\./, $stachan;
+               $sta = $parts[1];
+            } else {
+               my @parts = split /_/, $stachan;
+               $sta = $parts[0];
+            } 
+            if( $plot_type eq 'heli' || $plot_type eq 'heliwide' || $plot_type eq 'sgram' ) {
+                my @parts = split /_/, $stachan;
+                $stachan = join( '_', $parts[0], $parts[1], $parts[2] );
+            }
+            # Find first and last dates
+            foreach my $file (@image_files_all){
+                if ( $file =~ /$stachan/ ) {
+                    $file =~ /([12]\d{7})/;
+                    my $date = $1;
+                    unless( grep { $_ eq $date } @all_dates) {
+                        push @all_dates, $date;
+                    }
+                }
+            }
+            @all_dates = sort @all_dates;
+            if( scalar(@all_dates) > 0 ) {
+                printf( "%-12s %-6s %-20s %s %s\n", $plot_type, $sta, $stachan, $all_dates[0], $all_dates[-1] );
+            } else {
+                printf( "%-12s %-6s %-20s %s %s\n", $plot_type, $sta, $stachan, 'none', 'none' );
+            }
+            foreach my $date( @all_dates ){
+                printf FH1 "%-12s %-6s %-20s %s\n", $plot_type, $sta, $stachan, $date;
+            }
+        }
+    }
+
+}
+
+close( FH1 );

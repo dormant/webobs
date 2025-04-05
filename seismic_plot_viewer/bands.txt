@@ -1,0 +1,10 @@
+heli      BHZ HHZ MHZ SHZ EHZ
+helisp    MHZ SHZ EHZ
+heliwide  SHZ EHZ
+sgram     BHZ HHZ SHZ
+pan       HHZ BHZ SHZ
+heliscan  SHZ BHZ
+helidisp  BIZ HIZ HHZ
+infra     EDF HDF PR1
+strain    BLZ
+vlp       V 3C

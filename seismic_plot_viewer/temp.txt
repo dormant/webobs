@@ -1,0 +1,56 @@
+ABD:   La Joyeuse, Anse Bertrand, Guadeloupe
+AIRS:  Air Studios, Montserrat
+ANWB:  Willy Bob, Barbuda, Antigua and Barbuda (NEIC)
+BBGH:  Gun Hill, Barbados
+BHS:   Orange Hill, St. Vincent
+DLPL:  La Plaine, Dominica
+DSLB:  Salisbury, Dominica
+DWS:   Wesley, Dominica
+GCMP:  Mt. Pleasant, Carriacou, Grenada
+GRGR:  Grenville, Grenada
+GRHS:  Sauteurs, Grenada
+GRSS:  Sisters, Grenada
+GRW:   Mt. St. Catherine, Grenada
+MBBE:  Bethel, Montserrat
+MBBY:  Broderick's Yard, Montserrat
+MBET:  Bethel, Montserrat
+MBFL:  Flemmings, Montserrat
+MBFR:  Fergus Ridge, Montserrat
+MBGA:  Gages, Montserrat
+MBGB:  Garibaldi Hill, Montserrat
+MBGE:  Galways Estate, Montserrat
+MBGH:  St. Georges Hill, Montserrat
+MBHA:  Harris, Montserrat
+MBLG:  Long Ground, Montserrat
+MBLY:  Lee's Yard, Montserrat
+MBMH:  Mongo Hill, Montserrat
+MBRV:  Rendezvous, Montserrat
+MBRY:  Roches Yard, Montserrat
+MBSS:  South Soufriere Hills, Montserrat
+MBW1:  Waterworks, Montserrat (north microphone)
+MBW2:  Waterworks, Montserrat (centre microphone)
+MBW3:  Waterworks, Montserrat (south microphone)
+MBWH:  Windy Hill, Montserrat
+MBWW:  Waterworks, Montserrat
+MCPT:  Chances Peak, Montserrat
+MDN:   Morne Daniel, Dominica
+MGAT:  Gages, Montserrat
+MHRV:  Hermitage. Montserrat
+MLGT:  Long Ground, Montserrat
+MRYT:  Roaches Yard, Montserrat
+MSCP:  Chances Peak, Montserrat
+MSMX:  Molyneux, Montserrat
+MSS1:  Scar 1
+MSUH:  Upper Hermitage, Montserrat
+MWHZ:  Windy Hill, Montserrat
+SABA:  Saba
+SFAN:  Fancy, St. Vincent
+SOA:   Owia, St Vincent
+SSV:   Summit, St. Vincent
+SSVA,  Summit Station2, St Vincent
+SSVA:  Summit Station2, St Vincent
+SVB:   Belmont, St. Vincent
+SVGT:  Georgetown, St Vincent
+SVT:   Saint Vincent (Camden Park) (NEIC)
+SVV:   Wallibou, St. Vincent
+TRNT:  Trants, Montserrat
