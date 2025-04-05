@@ -76,7 +76,6 @@ These text files summarize what plots are available and are updated once a day.
 | *check_holdings.pl* | Script to update *holdings_detailed.txt*. |
 | *check_holdings.sh* | Script to run *check_holdings.pl* and update *holdings.txt*. Runs once a day as a cronjob.|
 | *find_img.pl* | Standalone Perl script to find plot files (only used in debugging).|
-| *seismic_monthly_plot_viewer.cgi* | Displays monthly montages of helicorders. Only used in *notWebobs*.|
 | *seismic_plot_viewer.cgi* | Main script.|
 | *seismic_plot_viewer_mob.cgi* | Temporary version of script for use on mobile devices.|
 | *update_mlocate.pl* | Script to update mlocate databases. Runs once a day as a cronjob.|
