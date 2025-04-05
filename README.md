@@ -6,17 +6,11 @@ Scripts for webobs.
 
 Various scripts written for the webobs installation at MVO.
 
-## Getting Started
-
-### Dependencies
-
-* Webobs
-
-### Installing on *webobs* server.
+## Installing on *webobs* server.
 
 * CGI scripts go in */mvo/webobs/WWW/cgi-bin*.
 * HTML scripts go in */mvo/webobs/WWW/html*.
-* */home/wwebobs/src/seismic_plot_viewer*.
+* */home/webobs/src/seismic_plot_viewer*.
 
 ## crontab.txt
 
