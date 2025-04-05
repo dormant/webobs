@@ -1,8 +1,0 @@
-The following lines are needed in the crontab for wwsuser on webobs.
-The last one is used when we need the helis to be copied elsewhere.
-
-# m h  dom mon dow   command
-10 20 * * * cd /home/webobs/src/seismic_plot_viewer; ./update_mlocate.pl >/dev/null 2>&1
-30 20 * * * cd /home/webobs/src/seismic_plot_viewer; ./check_holdings.sh >/dev/null 2>&1
-#* * * * * /home/webobs/bin/copy_heli.sh >/dev/null 2>&1
-
