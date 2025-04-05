@@ -20,10 +20,20 @@ This contains the crontab entries to be run by user *wwsuser* on *winston1*.
 
 | Directory       | Function |
 | -------------| -------------------|
+| *cgi-bin* | Various cgi scripts.|
 | *html* | Various standalone html pages to view seismic data.|
 | *seismic_plot_viewer* | Interactive viewer for helicorder plots and lots, lots more.|
 | *webobs-misc* | Miscellaneous stuff.|
 | *wws_heli_viewer* | Dynamic helicorder creation tool.|
+
+## cgi-bin
+
+### Scripts
+
+| File       | Function |
+| -------------| -------------------|
+| *mvo_alarms_last.cgi* | List recent alarms created by seismic system.|
+| *wws_rsam_viewer.cgi* | View RSAM data.|
 
 ## seismic_plot_viewer
 
