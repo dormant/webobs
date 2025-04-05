@@ -18,6 +18,10 @@ Various scripts written for the webobs installation at MVO.
 * HTML scripts go in */mvo/webobs/WWW/html*.
 * */home/wwebobs/src/seismic_plot_viewer*.
 
+## crontab.txt
+
+This contains the crontab entries to be run by user *wwsuser* on *winston1*.
+
 ## Directories
 
 | Directory       | Function |
@@ -33,7 +37,7 @@ Various scripts written for the webobs installation at MVO.
 
 seismic_plot_viewer is an interactive CGI script to view by date a variety of images of seismic, and other, data in webobs. It is viewable using the *Seismology | Helicorders etc* tab.
 
-These are the types of plots that it serves up.
+These are the different kinds of plots that it serves up.
 * Helicorders
 * Short-period helicorders
 * Wide short-period helicorders
@@ -42,7 +46,7 @@ These are the types of plots that it serves up.
 * Pan plots
 * Scanned paper helicorders
 * Displacement helicorders
-* VLP seismic waveforms
+* VLP waveforms
 * Strain waveforms
 * Strain pan plots
 * Infrasound helicorders
@@ -51,7 +55,7 @@ These are the types of plots that it serves up.
 
 The script should run in two modes, "normal" and "mobile". The second is a stripped-down version for use on mobile phones.
 
-This feature is not working and a hacked version of the main script, *seismic_plot_viewer_mob.cgi*, can be used instead.
+This feature is not currently working and a hacked version of the main script, *seismic_plot_viewer_mob.cgi*, can be used instead.
 
 ### Data sources
 
@@ -77,12 +81,19 @@ These text files summarize what plots are available and are updated once a day.
 | -------------| -------------------|
 | *check_holdings.pl* | Script to update *holdings_detailed.txt*. |
 | *check_holdings.sh* | Script to run *check_holdings.pl* and update *holdings.txt*. Runs once a day as a cronjob.|
-| *crontab.txt* | Entries for crontab to run update scripts.|
 | *find_img.pl* | Standalone Perl script to find plot files (only used in debugging).|
 | *seismic_monthly_plot_viewer.cgi* | Displays monthly montages of helicorders. Only used in *notWebobs*.|
 | *seismic_plot_viewer.cgi* | Main script.|
 | *seismic_plot_viewer_mob.cgi* | Temporary version of script for use on mobile devices.|
 | *update_mlocate.pl* | Script to update mlocate databases. Runs once a day as a cronjob.|
+
+## webobs-misc
+
+### Scripts
+
+| File       | Function |
+| -------------| -------------------|
+| *copy_heli.sh* | Script to copy today's helicorder plots to *notWebobs*. Runs as a cronjob every minute. Currently disabled.|
 
 ## Author
 
