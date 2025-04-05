@@ -103,4 +103,4 @@ https://services.dormant.org/
 
 ## License
 
-This project is licensed to Montserrat Volcano Observatory.
+This project is the property of Montserrat Volcano Observatory.
