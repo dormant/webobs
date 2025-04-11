@@ -1,7 +1,7 @@
 heli      BHZ HHZ MHZ SHZ EHZ
 helisp    MHZ SHZ EHZ
 heliwide  SHZ EHZ
-sgram     BHZ HHZ SHZ
+sgram     BHZ HHZ SHZ EHZ
 pan       HHZ BHZ SHZ
 heliscan  SHZ BHZ
 helidisp  BIZ HIZ HHZ
