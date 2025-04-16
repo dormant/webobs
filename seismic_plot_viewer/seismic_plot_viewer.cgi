@@ -139,9 +139,9 @@ my @layouts = qw( normal mobile );
 my @plot_types = qw( heli helisp heliwide helimulti sgram pan heliscan helidisp vlp strain strainpan infra);
 my %plot_types_nice = (	'heli' => 'Helicorder',
 			'helisp' => 'Short-period helicorder',
-			'sgram' => 'Spectrogram',
+			'sgram' => 'Spectrogram (short-period)',
 			'pan' => 'Pan plot (1996-2019)',
-			'heliwide' => 'Wide helicorder (2020-today)',
+			'heliwide' => 'Wide short-period helicorder (2020-today)',
 			'helimulti' => 'Multiple helicorder (2014-yesterday)',
 			'heliscan' => 'Scanned helicorder (1995-1996)',
 			'helidisp' => 'Displacement helicorder (2009-today)',
